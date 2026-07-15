@@ -15,6 +15,13 @@ are aggregated into a summary.
 
 No GPU. No audio. One summarization at a time (so it can't thrash the CPU).
 
+## Web UI (MODE=serve)
+
+Open the container's URL in a browser (e.g. `http://HOST:8080/`) — the landing page
+lets you upload a clip or keyframes, watch it process, and see the summary, and it
+documents the API (with copy-paste curl for your server's own URL). `GET /health`
+returns readiness JSON.
+
 ## HTTP API (MODE=serve)
 
 `POST /summarize` (`multipart/form-data`):
