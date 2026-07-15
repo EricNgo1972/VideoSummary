@@ -1,0 +1,35 @@
+# Convenience wrapper for provisioning. `docker compose up -d --build`.
+services:
+  video-summarizer:
+    build:
+      context: .
+      args:
+        VLM_MODEL: moondream
+    image: mk-video-summarizer:latest
+    container_name: mk-video-summarizer
+    restart: unless-stopped
+
+    # CPU-only guardrails: cap cores so summarization can't starve MapleCam,
+    # and set a hard memory ceiling instead of disabling the OOM killer.
+    cpus: "4"
+    mem_limit: 6g
+    memswap_limit: 6g
+
+    volumes:
+      # MapleCam writes event clips here; summaries land beside them (or in OUT).
+      - ./data/in:/data/in
+      - ./data/out:/data/out
+
+    environment:
+      INPUT_DIR: /data/in
+      OUTPUT_DIR: /data/out        # leave blank to write summaries next to each clip
+      VLM_MODEL: moondream
+      FRAME_MODE: scene            # scene-change sampling (uniform fallback)
+      MAX_FRAMES: "6"
+      MIN_FRAMES: "3"
+      SCENE_THRESHOLD: "0.3"
+      FRAME_WIDTH: "640"
+      NUM_PREDICT: "80"
+      STABLE_SECONDS: "3"
+      PROCESS_EXISTING: "true"
+      # SUMMARY_MODEL: qwen2.5:1.5b   # optional: refine the summary with a tiny text LLM

@@ -1,0 +1,8 @@
+# Runtime data — mounted at container run, never committed
+data/
+*.summary.txt
+*.summary.json
+
+# Python
+__pycache__/
+*.pyc
