@@ -214,21 +214,20 @@ def build_overview(captions):
     return " ".join(uniq[:3])
 
 
-def summarize_video(path):
-    name = os.path.basename(path)
-    with tempfile.TemporaryDirectory(prefix="frames_") as tmp:
-        duration, frames = select_frames(path, tmp)
-        if not frames:
-            raise RuntimeError("no frames extracted (unreadable clip?)")
-        log(f"{name}: {len(frames)} frame(s), {duration:.1f}s, captioning...")
-        captions = []
-        for t, fp in frames:
-            try:
-                txt = caption_frame(fp)
-            except Exception as e:  # noqa: BLE001 - keep going on a bad frame
-                txt = f"(caption failed: {e})"
-            captions.append((t, txt))
+def caption_frames(frames):
+    """frames: [(t_or_None, jpg_path), ...] -> [(t_or_None, caption), ...]"""
+    captions = []
+    for t, fp in frames:
+        try:
+            txt = caption_frame(fp)
+        except Exception as e:  # noqa: BLE001 - keep going on a bad frame
+            txt = f"(caption failed: {e})"
+        captions.append((t, txt))
+    return captions
 
+
+def assemble_result(name, duration, captions):
+    """Turn per-frame captions into the summary result + text form."""
     timeline_lines = [f"[{fmt_ts(t)}] {txt}" for t, txt in captions]
     timeline_text = "\n".join(timeline_lines)
 
@@ -251,6 +250,42 @@ def summarize_video(path):
     }
     text_out = f"{name}\nDuration: {duration:.1f}s\n\nSummary:\n{overview}\n\nTimeline:\n{timeline_text}\n"
     return result, text_out
+
+
+def summarize_video(path):
+    return summarize_video_named(path, os.path.basename(path))
+
+
+def summarize_video_named(path, name):
+    """Extract frames from a video file, caption them, assemble the summary."""
+    with tempfile.TemporaryDirectory(prefix="frames_") as tmp:
+        duration, frames = select_frames(path, tmp)
+        if not frames:
+            raise RuntimeError("no frames extracted (unreadable clip?)")
+        log(f"{name}: {len(frames)} frame(s), {duration:.1f}s, captioning...")
+        captions = caption_frames(frames)
+    return assemble_result(name, duration, captions)
+
+
+def summarize_keyframes(name, image_paths, timestamps=None):
+    """Caption already-extracted keyframes (no ffmpeg). timestamps optional (seconds)."""
+    if not image_paths:
+        raise RuntimeError("no keyframes provided")
+    # Safety cap: if the caller sends more than MAX_FRAMES, subsample evenly.
+    if len(image_paths) > MAX_FRAMES:
+        keep = set(_evenly_pick(list(range(len(image_paths))), MAX_FRAMES))
+        log(f"{name}: {len(image_paths)} keyframes -> capped to {MAX_FRAMES}")
+        image_paths = [p for i, p in enumerate(image_paths) if i in keep]
+        if timestamps:
+            timestamps = [t for i, t in enumerate(timestamps) if i in keep]
+    frames = []
+    for i, p in enumerate(image_paths):
+        t = timestamps[i] if timestamps and i < len(timestamps) else None
+        frames.append((t, p))
+    duration = max([t for t, _ in frames if t is not None], default=0.0)
+    log(f"{name}: {len(frames)} keyframe(s), captioning...")
+    captions = caption_frames(frames)
+    return assemble_result(name, duration, captions)
 
 
 # ----------------------------------------------------------------------------

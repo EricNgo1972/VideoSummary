@@ -15,12 +15,19 @@ services:
     mem_limit: 6g
     memswap_limit: 6g
 
+    ports:
+      - "8080:8080"                # HTTP API: POST /summarize
+
     volumes:
-      # MapleCam writes event clips here; summaries land beside them (or in OUT).
+      # Only needed for MODE=watch/both. Safe to leave mounted in serve mode.
       - ./data/in:/data/in
       - ./data/out:/data/out
 
     environment:
+      MODE: serve                  # serve (HTTP API) | watch (folder) | both
+      PORT: "8080"
+      # API_KEY: "change-me"       # if set, callers must send header X-API-Key
+      MAX_UPLOAD_MB: "200"
       INPUT_DIR: /data/in
       OUTPUT_DIR: /data/out        # leave blank to write summaries next to each clip
       VLM_MODEL: moondream

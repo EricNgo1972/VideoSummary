@@ -28,8 +28,14 @@ RUN ollama serve & \
     sleep 2
 
 COPY worker.py /app/worker.py
+COPY server.py /app/server.py
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# HTTP API (MODE=serve|both). Ollama stays internal on 11434.
+EXPOSE 8080
+ENV MODE=serve PORT=8080
+WORKDIR /app
 
 # The base image sets ENTRYPOINT to ollama; override it with ours.
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

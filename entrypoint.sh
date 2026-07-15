@@ -33,5 +33,21 @@ if [ -n "${SUMMARY_MODEL:-}" ] && ! ollama show "$SUMMARY_MODEL" >/dev/null 2>&1
   ollama pull "$SUMMARY_MODEL"
 fi
 
-echo "[entrypoint] launching worker..."
-exec python3 /app/worker.py
+MODE="${MODE:-serve}"   # serve (HTTP API) | watch (folder) | both
+echo "[entrypoint] mode=$MODE"
+case "$MODE" in
+  serve)
+    exec python3 /app/server.py
+    ;;
+  watch)
+    exec python3 /app/worker.py
+    ;;
+  both)
+    python3 /app/worker.py &
+    exec python3 /app/server.py
+    ;;
+  *)
+    echo "[entrypoint] unknown MODE '$MODE' (use serve|watch|both)" >&2
+    exit 1
+    ;;
+esac

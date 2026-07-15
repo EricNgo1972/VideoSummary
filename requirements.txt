@@ -1,2 +1,4 @@
 requests>=2.31,<3
 watchdog>=4,<7
+flask>=3,<4
+waitress>=3,<4

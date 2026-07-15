@@ -2,11 +2,58 @@
 
 CPU-only container that turns short MapleCam event clips into text summaries.
 
-**Flow:** watch a folder → `ffmpeg` samples a few frames per clip → each frame is
-captioned by a small vision model (`moondream`) served by Ollama → captions are
-aggregated into a summary → a `.summary.txt` + `.summary.json` is written.
+Two ways to feed it, set by the `MODE` env var:
 
-No GPU. No audio. One clip at a time (so it can't thrash the CPU).
+- **`serve`** (default) — an HTTP API. MapleCam (in another container / on
+  another box) POSTs a clip **or a few keyframes** and gets the summary back.
+- **`watch`** — watches a mounted folder and writes a summary next to each clip.
+- **`both`** — runs the watcher and the HTTP API together.
+
+**Flow:** frames (uploaded, or sampled from the video with `ffmpeg`) → each frame
+is captioned by a small vision model (`moondream`) served by Ollama → captions
+are aggregated into a summary.
+
+No GPU. No audio. One summarization at a time (so it can't thrash the CPU).
+
+## HTTP API (MODE=serve)
+
+`POST /summarize` (`multipart/form-data`):
+
+| Field | Repeatable | Meaning |
+|-------|-----------|---------|
+| `frames` / `images` | yes | **Preferred.** Pre-extracted keyframe JPGs. No ffmpeg runs server-side. |
+| `video` | no | A whole clip; the server runs ffmpeg to sample frames. |
+| `name` | no | Label for the clip in the output. |
+| `timestamps` | no | Comma-separated seconds, one per keyframe, for the timeline. |
+
+`GET /health` → `{"status":"ok", ...}`.
+
+If `API_KEY` is set, every request (except `/health`) must send header
+`X-API-Key: <key>`.
+
+### Upload keyframes — preferred (light on bandwidth + server CPU)
+
+Extract keyframes on the **MapleCam side**, send only the JPGs:
+
+```bash
+# on the box that has the clip
+ffmpeg -i clip.mp4 -vf "select='gt(scene,0.3)',scale=640:-1" -vsync vfr kf_%03d.jpg
+
+curl -sf -X POST http://SUMMARIZER_HOST:8080/summarize \
+  -F "name=front_door_1830" \
+  -F "timestamps=1.2,4.7,9.3" \
+  -F "frames=@kf_001.jpg" -F "frames=@kf_002.jpg" -F "frames=@kf_003.jpg"
+```
+
+### Upload the whole video (server does the frame extraction)
+
+```bash
+curl -sf -X POST http://SUMMARIZER_HOST:8080/summarize \
+  -F "name=front_door_1830" \
+  -F "video=@clip.mp4"
+```
+
+Both return the same JSON (see **Output shape** below), plus a `text` field.
 
 ## Build
 
@@ -26,16 +73,16 @@ docker compose up -d --build
 or plain docker:
 
 ```bash
+# HTTP API (default): MapleCam POSTs clips/keyframes from anywhere
 docker run -d --name mk-video-summarizer --restart unless-stopped \
   --cpus="4" --memory="6g" --memory-swap="6g" \
-  -v /path/to/maplecam/events:/data/in \
-  -v /path/to/summaries:/data/out \
+  -p 8080:8080 \
   mk-video-summarizer:latest
 ```
 
-Point MapleCam's event-clip output at the `/data/in` mount. For each `clip.mp4`
-that lands, the container writes `clip.summary.txt` and `clip.summary.json`
-(to `/data/out`, or beside the clip if `OUTPUT_DIR` is blank).
+For the folder workflow instead, add `-e MODE=watch` and mount `/data/in`
+(+ `/data/out`); each `clip.mp4` that lands produces `clip.summary.txt` and
+`clip.summary.json`. Use `-e MODE=both` to run the API and the watcher together.
 
 ## Test one clip (no watching)
 
@@ -47,7 +94,11 @@ docker exec mk-video-summarizer python3 /app/worker.py --once /data/in/some_clip
 
 | Var | Default | Meaning |
 |-----|---------|---------|
-| `INPUT_DIR` | `/data/in` | Folder to watch (recursive). |
+| `MODE` | `serve` | `serve` (HTTP API), `watch` (folder), or `both`. |
+| `PORT` | `8080` | HTTP API port (serve/both). |
+| `API_KEY` | *(unset)* | If set, requests must send header `X-API-Key`. |
+| `MAX_UPLOAD_MB` | `200` | Max request body size for uploads. |
+| `INPUT_DIR` | `/data/in` | Folder to watch (recursive), MODE=watch/both. |
 | `OUTPUT_DIR` | `/data/out` | Where summaries go; blank = beside each clip. |
 | `VLM_MODEL` | `moondream` | Ollama vision model for captioning. |
 | `SUMMARY_MODEL` | *(unset)* | Optional tiny text LLM to refine the summary (e.g. `qwen2.5:1.5b`). Pulled on first start. |
