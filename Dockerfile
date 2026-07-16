@@ -44,10 +44,14 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Runtime config + HTTP API (MODE=serve|both). Ollama stays internal on 11434.
+# OLLAMA_MAX_LOADED_MODELS=1: load ONE model at a time so the vision model is
+# unloaded before the summary model loads — peak RAM ~3 GB instead of ~5, which
+# keeps two-model summarization inside the tenant's memory cap.
 ENV INPUT_DIR=/data/in \
     OUTPUT_DIR=/data/out \
     MODE=serve \
-    PORT=8080
+    PORT=8080 \
+    OLLAMA_MAX_LOADED_MODELS=1
 EXPOSE 8080
 WORKDIR /app
 
