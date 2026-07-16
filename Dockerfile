@@ -8,16 +8,22 @@
 # never re-pulled on deploy.
 FROM ollama/ollama:latest
 
-# Vision model baked into the image so provisioning needs no network pull.
+# Models baked into the image so provisioning needs no network pull:
+#   VLM_MODEL     — the vision model that captions frames
+#   SUMMARY_MODEL — a small text model that condenses the captions into a
+#                   crisp 1-2 sentence summary (blank = simple template instead)
 ARG VLM_MODEL=moondream
-ENV VLM_MODEL=${VLM_MODEL}
+ARG SUMMARY_MODEL=qwen2.5:1.5b
+ENV VLM_MODEL=${VLM_MODEL} \
+    SUMMARY_MODEL=${SUMMARY_MODEL}
 
-# Bake the vision model into the image: briefly run the server, pull, stop.
-# Placed early so it only invalidates when the base image or model changes.
+# Bake the models into the image: briefly run the server, pull, stop.
+# Placed early so it only invalidates when the base image or a model changes.
 RUN ollama serve & \
     server_pid=$! ; \
     until ollama list >/dev/null 2>&1; do sleep 1; done ; \
     ollama pull "${VLM_MODEL}" ; \
+    ollama pull "${SUMMARY_MODEL}" ; \
     kill "$server_pid" 2>/dev/null || true ; \
     sleep 2
 
