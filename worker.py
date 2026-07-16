@@ -50,13 +50,16 @@ MIN_FRAMES = int(_env("MIN_FRAMES", "3"))
 FRAME_MODE = _env("FRAME_MODE", "scene").lower()  # "scene" (with uniform fallback) or "uniform"
 SCENE_THRESHOLD = float(_env("SCENE_THRESHOLD", "0.3"))
 FRAME_WIDTH = int(_env("FRAME_WIDTH", "640"))     # downscale width fed to the VLM
-NUM_PREDICT = int(_env("NUM_PREDICT", "80"))      # cap caption length (CPU time)
+NUM_PREDICT = int(_env("NUM_PREDICT", "120"))     # cap caption length (CPU time)
 
+# Keep this a PLAIN, DIRECT question. Moondream (and similar small VLMs) choke on
+# over-instructed prompts — a conditional like "if nothing notable, say 'no
+# activity'" makes it emit a single stop token and return an empty string. A
+# straight question reliably yields an accurate description of people/vehicles.
 CAPTION_PROMPT = _env(
     "CAPTION_PROMPT",
-    "This is a still frame from a security camera. In one short sentence, "
-    "describe the people, vehicles, animals, or activity visible. If nothing "
-    "notable is present, say 'no activity'.",
+    "Are there any people, vehicles, or animals in this image? "
+    "Describe what they are doing.",
 )
 
 STABLE_SECONDS = int(_env("STABLE_SECONDS", "3"))   # wait for the file to stop growing
